@@ -1,0 +1,64 @@
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+</head>
+<body>
+  <canvas id="canvas" width="800" height="800"></canvas>
+
+  <div>
+    <span id="fps"></span> FPS
+  </div>
+
+  <div>
+    <div>
+      Sun
+    </div>
+
+    <div>
+      X <input type="range" step="0.01" min="-3" max="3" id="sun-center-x">
+    </div>
+
+    <div>
+      Y <input type="range" step="0.01" min="-3" max="3" id="sun-center-y">
+    </div>
+
+    <div>
+      Z <input type="range" step="0.01" min="-5" max="0" value="-3" id="sun-center-z">
+    </div>
+
+    <div>
+      Radius <input type="range" step="0.01" max="1" id="sun-radius">
+    </div>
+  </div>
+
+  <div>
+    <div>
+      Planet
+    </div>
+
+    <div>
+      X <input type="range" step="0.01" min="-3" max="3" id="planetcenter-x">
+    </div>
+
+    <div>
+      Y <input type="range" step="0.01" min="-3" max="3" id="planetcenter-y">
+    </div>
+
+    <div>
+      Z <input type="range" step="0.01" min="-5" max="0" id="planetcenter-z">
+    </div>
+  </div>
+  
+  <style>
+    input[type="range"] {
+      width: 100%;
+    }
+  </style>
+
+  <script src="GPU2D.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
