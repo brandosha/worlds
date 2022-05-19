@@ -8,11 +8,11 @@
 <body>
   <canvas id="canvas" width="800" height="800"></canvas>
 
-  <div>
+  <div class="hud">
     <span id="fps"></span> FPS
   </div>
 
-  <div>
+  <!-- <div>
     <div>
       Sun
     </div>
@@ -26,7 +26,7 @@
     </div>
 
     <div>
-      Z <input type="range" step="0.01" min="-5" max="0" value="-3" id="sun-center-z">
+      Z <input type="range" step="0.01" min="-100" max="0" value="-3" id="sun-center-z">
     </div>
 
     <div>
@@ -56,9 +56,30 @@
     input[type="range"] {
       width: 100%;
     }
+  </style> -->
+
+  <style>
+    body {
+      padding: 0;
+      margin: 0;
+    }
+
+    .hud {
+      position: fixed;
+      top: 0;
+      left: 0;
+
+      width: 100%;
+
+      padding: 0.5em;
+
+      color: white;
+      font-family: 'Courier New', Courier, monospace;
+    }
   </style>
 
   <script src="GPU2D.js"></script>
+  <script src="scripts/transformations.js"></script>
   <script src="script.js"></script>
 </body>
 </html>

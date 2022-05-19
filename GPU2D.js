@@ -91,21 +91,19 @@ void main() {
     const program = gl.createProgram()
     this._attachVertexShader(program)
 
-    const mainSimple = `gl_FragColor = pixel(gl_FragCoord.x, gl_FragCoord.y);`
+    const mainSimple = `gl_FragColor = pixel(gl_FragCoord.xy);`
     const mainGrid = `
-  float normX = gl_FragCoord.x / uViewSize.x;
-  float normY = 1.0 - gl_FragCoord.y / uViewSize.y;
+  vec2 norm = gl_FragCoord.xy / uViewSize.xy;
+  norm.y = 1.0 - norm.y;
 
-  float x = 2.0 * normX - 1.0;
-  float y = 2.0 * normY - 1.0;
-
+  vec2 gridCoord = 2.0 * norm - 1.0;
   if (uViewSize.x > uViewSize.y) {
-    x *= uViewSize.x / uViewSize.y;
+    gridCoord.x *= uViewSize.x / uViewSize.y;
   } else {
-    y *= uViewSize.y / uViewSize.x;
+    gridCoord.y *= uViewSize.y / uViewSize.x;
   }
 
-  gl_FragColor = pixel(x, y, normX, normY);
+  gl_FragColor = pixel(gl_FragCoord.xy, gridCoord);
 `
     
     const code = `
