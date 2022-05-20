@@ -52,7 +52,7 @@ fetch('atmosphere.vert').then(response => response.text()).then(code => {
   kernel.useProgram(program)
 
   // kernel.setUniformValue('sun.center', (gl, l) => gl.uniform3f(l, 0, 1.5, -3))
-  kernel.setUniformValue('sun.radius', (gl, l) => gl.uniform1f(l, 50))
+  kernel.setUniformValue('sun.radius', (gl, l) => gl.uniform1f(l, 10))
   // kernel.setUniformValue('planetCenter', (gl, l) => gl.uniform3f(l, 0, -0.801, 0))
 
   // let cameraRotation = rotationMatrix(0, 0.1, 0)
@@ -150,7 +150,8 @@ function render(now) {
   kernel.setUniformValue('cameraRotation', (gl, l) => gl.uniformMatrix3fv(l, false, cameraRotation))
 
   const t = now / 1000
-  kernel.setUniformValue('sun.center', (gl, l) => gl.uniform3f(l, 0, 300 * cos(t / 60 - 2), 300 * sin(t / 60 - 2)))
+  const dayLength = 120
+  kernel.setUniformValue('sun.center', (gl, l) => gl.uniform3f(l, 0, 300 * cos(t / dayLength - 2), 300 * sin(t / dayLength - 2)))
   
   kernel.draw()
 

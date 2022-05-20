@@ -23,7 +23,7 @@ uniform mat3 cameraRotation;
 
 const float convergedStepSize = 0.001;
 const float minStepSize = 0.5;
-const float atmosphereStepSize = atmosphereRadius / 5.0;
+const float atmosphereStepSize = atmosphereRadius / 4.0;
 // const float opticalDepthStepSize = 0.1;
 
 const float scatteringStrength = 1.0;
@@ -48,11 +48,18 @@ float sdf_sphere(vec3 p, Sphere sphere) {
   return length(p - sphere.center) - sphere.radius;
 }
 
-float sdfPlanetSurface(vec3 p) {
+float sdfPlanetSurface(vec3 p, float eyeDistance) {
   vec3 surfaceVector = normalize(planetCenter - p);
   // float displacement = 3.0 * sin(surfaceVector.z * 100.0) + 2.5 * cos(surfaceVector.x * 197.0) + 0.5 * sin(surfaceVector.y * 221.0) + 0.5 * cos(surfaceVector.z * 231.0);
   // displacement *= 0.4;
-  float displacement = sin(surfaceVector.z * 11.0) + cos(surfaceVector.x * 13.0);
+  float displacement = 3.0 * sin(surfaceVector.z * 11.0) + 3.0 * cos(surfaceVector.x * 13.0);
+  if (eyeDistance < 50.0) {
+    displacement += 0.5 * sin(surfaceVector.z * 101.0) + 0.5 * cos(surfaceVector.x * 152.0);
+  }
+  if (eyeDistance < 20.0) {
+    
+    displacement += 0.02 * (sin(surfaceVector.z * 32130.0) + cos(surfaceVector.x * 40270.0));
+  }
   return sdf_sphere(p, planet) + displacement;
 }
 
@@ -113,7 +120,7 @@ float atmosphericDensityHeight(float height) {
   return exp(-height01 * densityFalloff) * maxDensity;
 }
 
-float sunRayOpticalDepthAtPoint(vec3 origin) {
+float sunRayOpticalDepthAtPoint(vec3 origin, float eyeDistance) {
   float densitySum = 0.0;
 
   vec3 rayDirection = normalize(sun.center - origin);
@@ -122,7 +129,7 @@ float sunRayOpticalDepthAtPoint(vec3 origin) {
     vec3 point = origin + rayDirection * m;
 
     // float sqrPlanetDist = sqrDist(point, planet.center);
-    if (sdfPlanetSurface(point) < 0.0) {
+    if (sdfPlanetSurface(point, max(20.01, eyeDistance + m)) < 0.0) {
       return 1000.0;
     }
 
@@ -137,6 +144,10 @@ float sunRayOpticalDepthAtPoint(vec3 origin) {
   return densitySum * atmosphereStepSize;
 }
 
+bool approxEqual(float a, float b, float epsilon) {
+  return abs(a - b) < epsilon;
+}
+
 vec4 pixel(vec2 coord, vec2 gridCoord) {
   Ray ray = rayForPixel(gridCoord);
 
@@ -146,21 +157,23 @@ vec4 pixel(vec2 coord, vec2 gridCoord) {
   float sunRayOpticalDepth = 0.0;
   vec3 inScatteredLight = vec3(0.0);
 
+  float nextAtmosphereStep = 0.0;
+
   float stepSize = minStepSize;
   float rayLength = 0.0;
   vec3 point = cameraPos;
   for (int i = 0; i < 300; i++) {
     // vec3 point = cameraPos + ray.direction * m;
-    point += ray.direction * stepSize;
-    rayLength += stepSize;
+    
+    
 
     if (rayLength > 1000.0) {
       break;
     }
 
-    float sdfPlanet = sdfPlanetSurface(point); // sdf_sphere(point, planet);
+    float sdfPlanet = sdfPlanetSurface(point, rayLength); // sdf_sphere(point, planet);
     if (sdfPlanet < convergedStepSize) {
-      sunRayOpticalDepth = sunRayOpticalDepthAtPoint(point);
+      sunRayOpticalDepth = sunRayOpticalDepthAtPoint(point, rayLength);
       vec3 sunLight = exp(-sunRayOpticalDepth * scatteringCoefficients);
       surfaceColor = vec3(0, 0.44, 0.1) * (sunLight + 0.2);
       break;
@@ -191,20 +204,30 @@ vec4 pixel(vec2 coord, vec2 gridCoord) {
 
     float sqrAtmosphereDist = sqrDist(point, atmosphere.center);
     if (sqrAtmosphereDist < sqrAtmosphereRadius) {
-      float localDensity = atmosphericDensityHeight(sdfPlanet);
-      viewRayOpticalDepth += localDensity * stepSize;
-      sunRayOpticalDepth = sunRayOpticalDepthAtPoint(point);
-      // float viewRayOpticalDepth = viewRayOpticalDepthSum * stepSize;
-      vec3 transmittance = exp(-(viewRayOpticalDepth + sunRayOpticalDepth) * scatteringCoefficients);
-      inScatteredLight += localDensity * transmittance * stepSize;
+      // float distFromStep = mod(rayLength, atmosphereStepSize);
+      if (nextAtmosphereStep == 0.0) {
+        nextAtmosphereStep = rayLength;
+      }
+      if (rayLength > nextAtmosphereStep - 1.0) {
+        float localDensity = atmosphericDensityHeight(sdfPlanet);
+        viewRayOpticalDepth += localDensity * atmosphereStepSize;
+        sunRayOpticalDepth = sunRayOpticalDepthAtPoint(point, rayLength);
+        // float viewRayOpticalDepth = viewRayOpticalDepthSum * stepSize;
+        vec3 transmittance = exp(-(viewRayOpticalDepth + sunRayOpticalDepth) * scatteringCoefficients);
+        inScatteredLight += localDensity * transmittance * atmosphereStepSize;
 
-      nextStepSize = min(nextStepSize, atmosphereStepSize);
+        nextAtmosphereStep += atmosphereStepSize;
+      }
+      
+      nextStepSize = min(nextStepSize, nextAtmosphereStep - rayLength);
     }
 
     stepSize = nextStepSize;
     // stepSize = min(stepSize, atmosphereStepSize)
 
     // stepSize *= 1.02;
+    rayLength += stepSize;
+    point = cameraPos + ray.direction * rayLength;
   }
 
   inScatteredLight *= scatteringCoefficients * brightness;
