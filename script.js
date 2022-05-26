@@ -1,6 +1,6 @@
 const canvas = document.getElementById('canvas')
-canvas.width = window.innerWidth * window.devicePixelRatio
-canvas.height = window.innerHeight * window.devicePixelRatio
+// canvas.width = window.innerWidth * window.devicePixelRatio
+// canvas.height = window.innerHeight * window.devicePixelRatio
 canvas.style.width = canvas.width / window.devicePixelRatio + 'px'
 canvas.style.height = canvas.height / window.devicePixelRatio + 'px'
 
@@ -39,20 +39,24 @@ gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT)
 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT)
 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, 1, 1, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, new Uint8Array([255]))
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([255, 255, 255, 255]))
 
 blueNoise.onload = () => {
   gl.bindTexture(gl.TEXTURE_2D, blueNoiseTexture)
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, gl.LUMINANCE, gl.UNSIGNED_BYTE, blueNoise)
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, blueNoise)
 }
-blueNoise.src = 'textures/blue-noise.png'
+blueNoise.src = 'textures/blue-noise-rgba.png'
 
-fetch('atmosphere.vert').then(response => response.text()).then(code => {
+fetch('shaders/raymarching-sdf.frag').then(response => response.text()).then(code => {
   const program = kernel.create2dProgram(code)
   kernel.useProgram(program)
 
   // kernel.setUniformValue('sun.center', (gl, l) => gl.uniform3f(l, 0, 1.5, -3))
   kernel.setUniformValue('sun.radius', (gl, l) => gl.uniform1f(l, 10))
+
+  const randomFrequencies = Array.from({ length: 2 * 5 }, (_, i) => Math.random() + Math.floor(i / 2))
+  console.log(randomFrequencies)
+  kernel.setUniformValue('randomFrequencies', (gl, l) => gl.uniform2fv(l, randomFrequencies))
   // kernel.setUniformValue('planetCenter', (gl, l) => gl.uniform3f(l, 0, -0.801, 0))
 
   // let cameraRotation = rotationMatrix(0, 0.1, 0)
@@ -102,17 +106,17 @@ function render(now) {
   const deltaR = rotationalAcceleration * delta / 1000
 
   if (keysDown.has('ArrowLeft')) {
-    rotationalVelocities[1] -= deltaR * 2
+    rotationalVelocities[1] -= deltaR
     // cameraRotation[2] -= deltaA
   } else if (keysDown.has('ArrowRight')) {
-    rotationalVelocities[1] += deltaR * 2
+    rotationalVelocities[1] += deltaR
     // cameraRotation[2] += deltaA
   }
 
   if (keysDown.has('ArrowUp')) {
-    rotationalVelocities[0] -= deltaR * 2
+    rotationalVelocities[0] -= deltaR
   } else if (keysDown.has('ArrowDown')) {
-    rotationalVelocities[0] += deltaR * 2
+    rotationalVelocities[0] += deltaR
   }
 
   rotationalVelocities = vecScale(rotationalVelocities, 0.9)
@@ -151,7 +155,7 @@ function render(now) {
 
   const t = now / 1000
   const dayLength = 120
-  kernel.setUniformValue('sun.center', (gl, l) => gl.uniform3f(l, 0, 300 * cos(t / dayLength - 2), 300 * sin(t / dayLength - 2)))
+  kernel.setUniformValue('sun.center', (gl, l) => gl.uniform3f(l, 0, 300 * cos(t / dayLength - 1.5), 300 * sin(t / dayLength - 1.5)))
   
   kernel.draw()
 

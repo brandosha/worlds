@@ -23,7 +23,7 @@ uniform mat3 cameraRotation;
 
 const float convergedStepSize = 0.001;
 const float minStepSize = 0.5;
-const float atmosphereStepSize = atmosphereRadius / 4.0;
+const float atmosphereStepSize = atmosphereRadius / 2.0;
 // const float opticalDepthStepSize = 0.1;
 
 const float scatteringStrength = 1.0;
@@ -48,27 +48,58 @@ float sdf_sphere(vec3 p, Sphere sphere) {
   return length(p - sphere.center) - sphere.radius;
 }
 
-float sdfPlanetSurface(vec3 p, float eyeDistance) {
-  vec3 surfaceVector = normalize(planetCenter - p);
-  // float displacement = 3.0 * sin(surfaceVector.z * 100.0) + 2.5 * cos(surfaceVector.x * 197.0) + 0.5 * sin(surfaceVector.y * 221.0) + 0.5 * cos(surfaceVector.z * 231.0);
-  // displacement *= 0.4;
-  float displacement = 3.0 * sin(surfaceVector.z * 11.0) + 3.0 * cos(surfaceVector.x * 13.0);
-  if (eyeDistance < 50.0) {
-    displacement += 0.5 * sin(surfaceVector.z * 101.0) + 0.5 * cos(surfaceVector.x * 152.0);
-  }
-  if (eyeDistance < 20.0) {
-    
-    displacement += 0.02 * (sin(surfaceVector.z * 32130.0) + cos(surfaceVector.x * 40270.0));
-  }
-  return sdf_sphere(p, planet) + displacement;
+const int randomFrequencyCount = 5;
+uniform vec2 randomFrequencies[randomFrequencyCount];
+
+float sum(vec2 v) {
+  return v.x + v.y;
 }
 
-// vec3 planetSurfaceNormal(vec3 p) {
-//   vec3 surfaceVector = normalize(planetCenter - p);
-//   float displacement = sin(surfaceVector.z * 80.0) + cos(surfaceVector.x * 81.0) + sin(surfaceVector.y * 82.0);
-//   displacement *= 0.1;
-//   return normalize(surfaceVector + vec3(displacement, displacement, displacement));
-// }
+float sharpWave(float x) {
+  return abs(fract(x*0.25) - 0.5) * 4.0 - 1.0;
+}
+vec2 sharpWave(vec2 x) {
+  return abs(fract(x*0.25) - 0.5) * 4.0 - 1.0;
+}
+
+float sdfPlanetSurface(vec3 p, float eyeDistance) {
+  // vec3 surfaceVector = normalize(planetCenter - p);
+  // float displacement = 3.0 * sin(surfaceVector.z * 100.0) + 2.5 * cos(surfaceVector.x * 197.0) + 0.5 * sin(surfaceVector.y * 221.0) + 0.5 * cos(surfaceVector.z * 231.0);
+  // displacement *= 0.4;
+  // float displacement = 3.0 * sin(surfaceVector.y * 11.0) + 3.0 * cos(surfaceVector.x * 13.0);
+  // if (eyeDistance < 50.0) {
+  //   displacement += 0.5 * sin(surfaceVector.y * 101.0) + 0.5 * cos(surfaceVector.x * 152.0);
+  // }
+  // if (eyeDistance < 20.0) {
+    
+  //   displacement += 0.02 * (sin(surfaceVector.y * 32130.0) + cos(surfaceVector.x * 40270.0));
+  // }
+
+  vec2 surfaceVector = acos(normalize(planetCenter - p).xy);
+  float displacement = 0.0;
+  /*float d0 = 0.0;
+  float d1 = 0.0;
+
+  for (int i = 0; i < randomFrequencyCount; i++) {
+    // vec2 freq = randomFrequencies[i];
+    vec2 p = randomFrequencies[i] * (surfaceVector + 1.0) * 8.0;
+    d0 += sin(p.x) * sin(p.y);
+    // p *= 4.0;
+    // d0 += sin(p.x) * sin(p.y) / 4.0;
+    // p *= 4.0;
+    // d0 += sin(p.x) * sin(p.y) / 4.0;
+    // displacement += sum(cos(80.0 * freq * (surfaceVector.xz + vec2(3.0, 8.0)))) / 3.0;
+    // d1 += sum(sin(80.0 * freq * (surfaceVector.xz + vec2(7.0, 19.0)))) / 3.0;
+
+    // if (eyeDistance < 50.0) {
+    //   displacement += max(0.0, sum(sharpWave(800.0 * freq * (surfaceVector.xz + vec2(7.0, 19.0))))) / 5.0;
+    // }
+  }
+  float displacement = (d0 + max(0.0, d1)) * 3.0 / float(randomFrequencyCount);*/
+  // displacement = 3.0 * sum(cos(surfaceVector.xy * randomFrequencies[0] * 15.0)); // 3.0 * (cos(surfaceVector.y * 15.0) + cos(surfaceVector.x * 15.0));
+
+  return sdf_sphere(p, planet) + displacement;
+}
 
 // vec3 planetSurfaceNormal(vec3 p ) 
 // {
@@ -96,7 +127,7 @@ struct Ray {
 uniform sampler2D blueNoise;
 
 Ray rayForPixel(vec2 coord) {
-  vec2 p = coord * 0.2;
+  vec2 p = coord * 0.5;
   p.y = -p.y;
 
   vec3 dir = vec3(p, -1.0);
@@ -121,27 +152,56 @@ float atmosphericDensityHeight(float height) {
 }
 
 float sunRayOpticalDepthAtPoint(vec3 origin, float eyeDistance) {
-  float densitySum = 0.0;
+  // float densitySum = 0.0;
+
+  float nextAtmosphereStep = atmosphereStepSize;
+  float opticalDepth = 0.0;
+
+  float res = 1.0;
 
   vec3 rayDirection = normalize(sun.center - origin);
+  float stepSize = minStepSize; // min(sdfPlanetSurface(origin, eyeDistance), atmosphereStepSize);
+  float rayLength = stepSize;
 
-  for (float m = 0.0; m < planet.radius; m += atmosphereStepSize) {
-    vec3 point = origin + rayDirection * m;
+  for (int i = 0; i < 30; i++) {
+    vec3 point = origin + rayDirection * rayLength;
 
-    // float sqrPlanetDist = sqrDist(point, planet.center);
-    if (sdfPlanetSurface(point, max(20.01, eyeDistance + m)) < 0.0) {
+    // // float sqrPlanetDist = sqrDist(point, planet.center);
+    // if (sdfPlanetSurface(point, max(20.01, eyeDistance + m)) < 0.0) {
+    //   return 1000.0;
+    // }
+
+    float sqrAtmosphereDist = sqrDist(point, atmosphere.center);
+    if (sqrAtmosphereDist > sqrAtmosphereRadius) {
+      break;
+    }
+
+    opticalDepth += atmosphericDensity(sqrAtmosphereDist) * stepSize;
+    // if (rayLength > nextAtmosphereStep - 0.01) {
+    //   densitySum += atmosphericDensity(sqrAtmosphereDist);
+    //   nextAtmosphereStep += atmosphereStepSize;
+    // }
+
+    // if (sqrAtmosphereDist < sqrAtmosphereRadius) {
+    //   opticalDepth += atmosphericDensity(sqrAtmosphereDist);
+    // } else {
+    //   break;
+    // }
+
+    float surfaceSdf = sdfPlanetSurface(point, eyeDistance + rayLength);
+    // stepSize = min(surfaceSdf, nextAtmosphereStep - rayLength);
+    stepSize = min(surfaceSdf, atmosphereStepSize);
+    rayLength += stepSize;
+
+    if (surfaceSdf < convergedStepSize) {
       return 1000.0;
     }
 
-    float sqrAtmosphereDist = sqrDist(point, atmosphere.center);
-    if (sqrAtmosphereDist < sqrAtmosphereRadius) {
-      densitySum += atmosphericDensity(sqrAtmosphereDist);
-    } else {
-      break;
-    }
+    res = min(res, 4.0 * surfaceSdf / rayLength);
   }
 
-  return densitySum * atmosphereStepSize;
+  return opticalDepth * res;
+  // return densitySum * atmosphereStepSize * res;
 }
 
 bool approxEqual(float a, float b, float epsilon) {
@@ -160,9 +220,11 @@ vec4 pixel(vec2 coord, vec2 gridCoord) {
   float nextAtmosphereStep = 0.0;
 
   float stepSize = minStepSize;
-  float rayLength = 0.0;
+  float rayLength = stepSize;
   vec3 point = cameraPos;
+  // int steps = 0;
   for (int i = 0; i < 300; i++) {
+    // steps++;
     // vec3 point = cameraPos + ray.direction * m;
     
     
@@ -222,20 +284,21 @@ vec4 pixel(vec2 coord, vec2 gridCoord) {
       nextStepSize = min(nextStepSize, nextAtmosphereStep - rayLength);
     }
 
-    stepSize = nextStepSize;
+    // stepSize = nextStepSize;
     // stepSize = min(stepSize, atmosphereStepSize)
 
-    // stepSize *= 1.02;
+    stepSize *= 1.02;
     rayLength += stepSize;
     point = cameraPos + ray.direction * rayLength;
   }
 
   inScatteredLight *= scatteringCoefficients * brightness;
-  inScatteredLight += (texture2D(blueNoise, coord / 64.0 / 2.0).rgb - 0.5) * 0.05;
+  // inScatteredLight += (texture2D(blueNoise, coord / 64.0 / 2.0).rgb - 0.5) * 0.05;
   // return vec4(texture2D(blueNoise, coord / 64.0).rgb, 1.0);
 
   // return vec4(surfaceColor, 1.0);
   // return vec4(vec3(1.0 / rayLength), 1.0);
+  // return vec4(randomFrequencies[0].x, 0.0, randomFrequencies[0].y, 1.0);
   return vec4(surfaceColor * (1.0 - inScatteredLight) + inScatteredLight, 1.0);
   // return vec4(surfaceColor + inScatteredLight, 1.0);
   // return vec4(screenX, screenY, 1.0 - screenX, 1.0);

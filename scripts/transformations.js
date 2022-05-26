@@ -17,6 +17,27 @@ function vecScale(vec, scale) {
   ]
 }
 
+function vecLength(vec) {
+  return Math.sqrt(vec[0] * vec[0] + vec[1] * vec[1] + vec[2] * vec[2])
+}
+
+function vecNorm(vec) {
+  let length = vecLength(vec)
+  return [
+    vec[0] / length,
+    vec[1] / length,
+    vec[2] / length
+  ]
+}
+
+function vecCross(a, b) {
+  return [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0]
+  ]
+}
+
 function matTransform3(vec, mat) {
   return [
     vec[0] * mat[0] + vec[1] * mat[3] + vec[2] * mat[6],
