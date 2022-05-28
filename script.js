@@ -54,7 +54,7 @@ fetch('shaders/raymarching-sdf.frag').then(response => response.text()).then(cod
   // kernel.setUniformValue('sun.center', (gl, l) => gl.uniform3f(l, 0, 1.5, -3))
   kernel.setUniformValue('sun.radius', (gl, l) => gl.uniform1f(l, 10))
 
-  const randomFrequencies = Array.from({ length: 2 * 5 }, (_, i) => Math.random() + Math.floor(i / 2))
+  const randomFrequencies = Array.from({ length: 2 * 5 }, (_, i) => (Math.random() + Math.floor(i / 2)) * 50)
   console.log(randomFrequencies)
   kernel.setUniformValue('randomFrequencies', (gl, l) => gl.uniform2fv(l, randomFrequencies))
   // kernel.setUniformValue('planetCenter', (gl, l) => gl.uniform3f(l, 0, -0.801, 0))

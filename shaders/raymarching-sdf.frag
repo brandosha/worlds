@@ -108,8 +108,7 @@ float sdfSphere(vec3 p, Sphere sphere) {
 }
 
 vec2 sphericalCoordinates(vec3 pos) {
-  vec2 uv = vec2(acos(pos.y), atan(pos.z, pos.x));
-  return uv;
+  return vec2(acos(pos.y), atan(pos.z, pos.x));
 }
 vec3 sphericalToCartesian(vec2 uv) {
   float theta = uv.x;
@@ -117,121 +116,68 @@ vec3 sphericalToCartesian(vec2 uv) {
   return vec3(cos(theta) * sin(phi), sin(theta) * sin(phi), cos(phi));
 }
 
-float sdfPlanet(vec3 p, float eyeDist) {
-  float d = length(p) - planetRadius;
-  // vec3 normal = normalize(p);
-
-  const vec3 tilePattern = vec3(1.0 / 8.0);
-  vec3 ballPos = (floor(p * tilePattern) + 0.5) / tilePattern;
-
-  float ballSurfaceDist = length(ballPos) - planetRadius;
-  if (ballSurfaceDist < 3.0) {
-    float radius = (sin(ballPos.x * randomFrequencies[0].x) + sin(ballPos.x * randomFrequencies[1].x) + sin(ballPos.y * randomFrequencies[0].y) + sin(ballPos.y * randomFrequencies[1].y)) / 4.0;
-    radius = radius * radius * 4.0;
-    // radius = min(max(radius, ballSurfaceDist), 4.0);
-    Sphere ball = Sphere(ballPos, radius);
-
-    float ballDist = sdfSphere(p, ball);
-    d = smin(d, ballDist, 0.75);
-    // if (ballDist < d) {
-    //   normal = normalize(p - ballPos);
-    // }
+vec3 discreteNormalize(vec3 p, vec3 normal) {
+  const float sqareSubdivisions = 8.0;
+  vec3 cubePoint = vec3(sqareSubdivisions);
+  vec3 a = abs(p);
+  if (a.x > a.y && a.x > a.z) {
+    cubePoint *= p / a.x;
+    cubePoint.yz = floor(cubePoint.yz) + 0.5;
+  } else if (a.y > a.z) {
+    cubePoint *= p / a.y;
+    cubePoint.xz = floor(cubePoint.xz) + 0.5;
+  } else {
+    cubePoint *= p / a.z;
+    cubePoint.xy = floor(cubePoint.xy) + 0.5;
   }
+
+  return normalize(cubePoint);
+}
+
+Sphere randomSphere(vec3 pos) {
+  float radius = 0.5;
+  float height = 4.0 * abs((sin(pos.x * randomFrequencies[0].x) + sin(pos.x * randomFrequencies[1].x) + sin(pos.y * randomFrequencies[0].y) + sin(pos.y * randomFrequencies[1].y)) / 4.0);
+
+  return Sphere(pos * (planetRadius + height), radius);
+}
+
+float sdfPlanet(vec3 p, float eyeDist) {
+  float distanceFromOrigin = length(p);
+  float d = length(distanceFromOrigin) - planetRadius;
+  vec3 normal = normalize(p);
+
+  if (d > 10.0) {
+    return d - 9.0;
+  }
+
+  vec3 ballPos = discreteNormalize(p, normal);
+  Sphere ball = randomSphere(ballPos);
+
+  float ballDist = sdfSphere(p, ball);
+  d = smin(d, ballDist, 1.75);
 
   return d;
-
-  /*float sphereDist = length(p) - planetRadius;
-
-  if (sphereDist > 3.1) {
-    return sphereDist - 3.0;
-  } else {
-    // vec3 normal = normalize(p);
-    float d = sphereDist;
-
-    const vec3 tilePattern = vec3(1.0 / 8.0);
-    vec3 ballPos = (floor(p * tilePattern) + 0.5) / tilePattern;
-    float radius = (sin(ballPos.x * randomFrequencies[0].x) + sin(ballPos.x * randomFrequencies[1].x) + sin(ballPos.y * randomFrequencies[0].y) + sin(ballPos.y * randomFrequencies[1].y)) / 4.0;
-    Sphere ball = Sphere(ballPos, radius * radius * 4.0);
-
-    float ballDist = sdfSphere(p, ball);
-    if (ballDist < sphereDist) {
-      d = ballDist;
-      // normal = normalize(p - ballPos);
-    }
-
-    return d;
-  }
-
-  return min(sphereDist, sdfSphere(p, Sphere(vec3(0, 100.5, -4), 0.5)));
-
-  if (sphereDist > 1.0) {
-    return sphereDist;
-  }
-
-  vec3 surfacePoint = normalize(p);
-
-  vec2 uv = sphericalCoordinates(surfacePoint);
-  const float uvGridSize = 3.14159265 / 32.0;
-  vec2 uvGrid = floor(uv / uvGridSize) * uvGridSize;
-
-  return min(sphereDist,
-              min(
-                min(
-                  sdfSphere(p, Sphere(planetRadius * sphericalToCartesian(uvGrid), 0.5)),
-                  sdfSphere(p, Sphere(planetRadius * sphericalToCartesian(uvGrid + vec2(uvGridSize, 0.0)), 0.5))
-                ),
-                min(
-                  sdfSphere(p, Sphere(planetRadius * sphericalToCartesian(uvGrid + vec2(0.0, uvGridSize)), 0.5)),
-                  sdfSphere(p, Sphere(planetRadius * sphericalToCartesian(uvGrid + vec2(uvGridSize)), 0.5))
-                )
-              )
-            );*/
 }
 
 vec4 sdfPlanetN(vec3 p, float eyeDist) {
-  float d = length(p) - planetRadius;
+  float distanceFromOrigin = length(p);
+  float d = length(distanceFromOrigin) - planetRadius;
   vec3 normal = normalize(p);
 
-  const vec3 tilePattern = vec3(1.0 / 8.0);
-  vec3 ballPos = (floor(p * tilePattern) + 0.5) / tilePattern;
+  if (d > 10.0) {
+    return vec4(normal, d - 9.0);
+  }
 
-  float ballSurfaceDist = length(ballPos) - planetRadius;
-  if (ballSurfaceDist < 3.0) {
-    float radius = (sin(ballPos.x * randomFrequencies[0].x) + sin(ballPos.x * randomFrequencies[1].x) + sin(ballPos.y * randomFrequencies[0].y) + sin(ballPos.y * randomFrequencies[1].y)) / 4.0;
-    radius = radius * radius * 4.0;
-    // radius = min(max(radius, ballSurfaceDist), 4.0);
-    Sphere ball = Sphere(ballPos, radius);
+  vec3 ballPos = discreteNormalize(p, normal);
+  Sphere ball = randomSphere(ballPos);
 
-    float ballDist = sdfSphere(p, ball);
-    d = smin(d, ballDist, 0.75);
-    if (ballDist < d) {
-      normal = normalize(p - ballPos);
-    }
+  float ballDist = sdfSphere(p, ball);
+  d = smin(d, ballDist, 1.75);
+  if (ballDist < d) {
+    normal = normalize(p - ball.center);
   }
 
   return vec4(normal, d);
-
-  /*float sphereDist = length(p) - planetRadius;
-
-  if (sphereDist > 3.1) {
-    return vec4(normalize(p), sphereDist - 3.0);
-  } else {
-    vec3 normal = normalize(p);
-    float d = sphereDist;
-
-    const vec3 tilePattern = vec3(1.0 / 8.0);
-    vec3 ballPos = (floor(p * tilePattern) + 0.5) / tilePattern;
-    float radius = (sin(ballPos.x * randomFrequencies[0].x) + sin(ballPos.x * randomFrequencies[1].x) + sin(ballPos.y * randomFrequencies[0].y) + sin(ballPos.y * randomFrequencies[1].y)) / 4.0;
-    Sphere ball = Sphere(ballPos, radius * radius * 4.0);
-
-    float ballDist = sdfSphere(p, ball);
-    if (ballDist < sphereDist) {
-      d = ballDist;
-      normal = normalize(p - ballPos);
-    }
-    
-    return vec4(normal, d);
-  }*/
 }
 
 // Returns vec2(opticalDepth, shadow)
@@ -277,8 +223,50 @@ vec2 sunRayOpticalDepthAtPoint(vec3 origin, float eyeDist) {
   return vec2(densitySum * atmosphereStepSize, clamp(res * 16.0, 0.0, 1.0));
 }
 
+vec4 debugSdf(Ray ray) {
+  vec2 basePlanetIntersection = raySphere(planet, ray);
+  if (basePlanetIntersection.x < maxFloat) {
+    vec3 point = ray.origin + ray.direction * basePlanetIntersection.x;
+    vec3 g = discreteNormalize(point, normalize(point));
+    vec3 col = (g + 1.0) / 2.0;
+
+    return vec4(col, 1.0);
+
+    return vec4(0, 0.35, 0.05, 1);
+  }
+
+  vec2 sunIntersection = raySphere(sun, ray);
+  if (sunIntersection.x < maxFloat) {
+    return vec4(1, 0.85, 0, 1.0);
+  }
+
+  const float rayLength = 5.0;
+  vec3 p = cameraPos + ray.direction * rayLength;
+  float basePlanetDistance = sdfSphere(p, planet);
+  vec4 res = sdfPlanetN(p, rayLength);
+
+  if (res.w == basePlanetDistance) {
+    return vec4(0.1, 0, 0.1, 1);
+  }
+
+  return vec4(vec3(exp(-res.w)), 1.0);
+}
+
+/*float opRep( in vec3 p, in vec3 c, in sdf3d primitive )
+{
+    vec3 q = mod(p+0.5*c,c)-0.5*c;
+    return primitive( q );
+}
+vec3 opRepLim( in vec3 p, in float c, in vec3 l, in sdf3d primitive )
+{
+    vec3 q = p-c*clamp(round(p/c),-l,l);
+    return primitive( q );
+}*/
+
 vec4 pixel(vec2 coord, vec2 gridCoord) {
   Ray ray = rayForPixel(gridCoord);
+
+  // return debugSdf(ray);
 
   vec3 color = vec3(0.0);
   bool reachedSpace = false;
