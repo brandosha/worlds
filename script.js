@@ -6,8 +6,15 @@ canvas.style.height = canvas.height / window.devicePixelRatio + 'px'
 
 
 
-const kernel = new GPU2D(canvas)
+const kernel = new GPU2D(canvas, {
+  preserveDrawingBuffer: true
+})
 const { gl } = kernel
+const rendering = {
+  framebuffer: gl.createFramebuffer(),
+  frameTexture: gl.createTexture(),
+  prevFrameTexture: gl.createTexture(),
+}
 
 for (const input of document.getElementsByTagName('input')) {
   let uniformName = input.id.split('-').join('.')
@@ -70,6 +77,8 @@ fetch('shaders/raymarching-sdf.frag').then(response => response.text()).then(cod
   gl.activeTexture(gl.TEXTURE0)
   gl.bindTexture(gl.TEXTURE_2D, blueNoiseTexture)
   kernel.setUniformValue('blueNoise', (gl, l) => gl.uniform1i(l, 0))
+
+  initFramebuffer()
 
   requestAnimationFrame(render)
 })
@@ -157,7 +166,41 @@ function render(now) {
   const dayLength = 120
   kernel.setUniformValue('sun.center', (gl, l) => gl.uniform3f(l, 0, 300 * cos(t / dayLength - 1.5), 300 * sin(t / dayLength - 1.5)))
   
+  const j = () => (Math.random() - 0.5)
+  kernel.setUniformValue('jitter', (gl, l) => gl.uniform3f(l, j(), j(), j()))
+
   kernel.draw()
 
+  gl.bindTexture(gl.TEXTURE_2D, rendering.prevFrameTexture)
+  gl.copyTexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 0, 0, canvas.width, canvas.height, 0)
+
   requestAnimationFrame(render)
+}
+
+
+function initFramebuffer() {
+  // const texture = rendering.frameTexture
+  // gl.activeTexture(gl.TEXTURE1)
+  // gl.bindTexture(gl.TEXTURE_2D, texture)
+  // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+  // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+  // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+  // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+  // gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.canvas.width, gl.canvas.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+
+  // const { framebuffer } = rendering
+  // gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer)
+  // gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0)
+
+  const prev = rendering.prevFrameTexture
+  gl.bindTexture(gl.TEXTURE_2D, prev)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.canvas.width, gl.canvas.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+
+  gl.activeTexture(gl.TEXTURE2)
+  gl.bindTexture(gl.TEXTURE_2D, prev)
+  kernel.setUniformValue('prevFrame', (gl, l) => gl.uniform1i(l, 2))
 }

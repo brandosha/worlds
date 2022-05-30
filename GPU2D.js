@@ -103,7 +103,7 @@ void main() {
     gridCoord.y *= uViewSize.y / uViewSize.x;
   }
 
-  gl_FragColor = pixel(gl_FragCoord.xy, gridCoord);
+  gl_FragColor = pixel(gl_FragCoord.xy, gridCoord, norm);
 `
     
     const code = `
