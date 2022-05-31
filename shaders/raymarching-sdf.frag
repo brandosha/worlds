@@ -17,6 +17,7 @@ uniform mat3 cameraRotation;
 
 uniform sampler2D blueNoise;
 
+uniform float t;
 uniform vec3 jitter;
 uniform sampler2D prevFrame;
 
@@ -29,10 +30,10 @@ const float opticalDepthSteps = 4.0;
 
 const float maxDist = 1000.0;
 
-const float scatteringStrength = 0.5;
+const float scatteringStrength = 0.25;
 const float brightness = 1.0;
 const float densityFalloff = 1.0;
-const float maxDensity = 0.15;
+const float maxDensity = 0.25;
 
 const vec3 wavelengths = vec3(700, 530, 460);
 const vec3 scatteringCoefficients = vec3(
@@ -122,8 +123,8 @@ vec3 sphericalToCartesian(vec2 uv) {
   return vec3(cos(theta) * sin(phi), sin(theta) * sin(phi), cos(phi));
 }
 
-vec3 discreteNormalize(vec3 p, vec3 normal) {
-  const float sqareSubdivisions = 8.0;
+const float sqareSubdivisions = 8.0;
+vec3 discreteNormalize(vec3 p) {
   vec3 cubePoint = vec3(sqareSubdivisions);
   vec3 a = abs(p);
   if (a.x > a.y && a.x > a.z) {
@@ -140,10 +141,45 @@ vec3 discreteNormalize(vec3 p, vec3 normal) {
   return normalize(cubePoint);
 }
 
+mat4 discretNormalize4(vec3 p) {
+  const vec2 v10 = vec2(1.0, 0.0);
+
+  vec3 cubePoint = vec3(sqareSubdivisions);
+  vec3 a = abs(p);
+  if (a.x > a.y && a.x > a.z) {
+    cubePoint *= p / a.x;
+    vec3 p00 = floor(cubePoint);
+    return mat4(
+      vec4(p00, 0.0),
+      vec4(p00 + v10.yxy, 0.0),
+      vec4(p00 + v10.yyx, 0.0),
+      vec4(p00 + v10.yxx, 0.0)
+    );
+  } else if (a.y > a.z) {
+    cubePoint *= p / a.y;
+    vec3 p00 = floor(cubePoint);
+    return mat4(
+      vec4(p00, 0.0),
+      vec4(p00 + v10.xyy, 0.0),
+      vec4(p00 + v10.yyx, 0.0),
+      vec4(p00 + v10.xyx, 0.0)
+    );
+  } else {
+    cubePoint *= p / a.z;
+    vec3 p00 = floor(cubePoint);
+    return mat4(
+      vec4(p00, 0.0),
+      vec4(p00 + v10.xyy, 0.0),
+      vec4(p00 + v10.yxy, 0.0),
+      vec4(p00 + v10.xxy, 0.0)
+    );
+  }
+}
+
 Sphere randomSphere(vec3 pos) {
-  float radius = 0.5;
+  float radius = 1.0;
   // float height = 0.5;
-  float height = 4.0 * abs((sin(pos.x * randomFrequencies[0].x) + sin(pos.x * randomFrequencies[1].x) + sin(pos.y * randomFrequencies[0].y) + sin(pos.y * randomFrequencies[1].y)) / 4.0);
+  float height = 8.0 * abs((sin(pos.x * randomFrequencies[0].x + t) + sin(pos.x * randomFrequencies[1].x + t) + sin(pos.y * randomFrequencies[0].y + t) + sin(pos.y * randomFrequencies[1].y + t)) / 4.0) - 3.0;
 
   return Sphere(pos * (planetRadius + height), radius);
 }
@@ -151,13 +187,12 @@ Sphere randomSphere(vec3 pos) {
 float sdfPlanet(vec3 p, float eyeDist) {
   float distanceFromOrigin = length(p);
   float d = length(distanceFromOrigin) - planetRadius;
-  vec3 normal = normalize(p);
 
   if (d > 10.0) {
     return d - 9.0;
   }
 
-  vec3 ballPos = discreteNormalize(p, normal);
+  vec3 ballPos = discreteNormalize(p);
   Sphere ball = randomSphere(ballPos);
 
   float ballDist = sdfSphere(p, ball);
@@ -175,7 +210,7 @@ vec4 sdfPlanetN(vec3 p, float eyeDist) {
     return vec4(normal, d - 9.0);
   }
 
-  vec3 ballPos = discreteNormalize(p, normal);
+  vec3 ballPos = discreteNormalize(p);
   Sphere ball = randomSphere(ballPos);
 
   float ballDist = sdfSphere(p, ball);
@@ -234,7 +269,7 @@ vec4 debugSdf(Ray ray) {
   vec2 basePlanetIntersection = raySphere(planet, ray);
   if (basePlanetIntersection.x < maxFloat) {
     vec3 point = ray.origin + ray.direction * basePlanetIntersection.x;
-    vec3 g = discreteNormalize(point, normalize(point));
+    vec3 g = discreteNormalize(point);
     vec3 col = (g + 1.0) / 2.0;
 
     return vec4(col, 1.0);
@@ -270,6 +305,15 @@ vec3 opRepLim( in vec3 p, in float c, in vec3 l, in sdf3d primitive )
     return primitive( q );
 }*/
 
+vec3 surfaceShader(float viewRayOpticalDepth, vec2 sunRayOpticalDepth, vec4 planetDist, vec3 point) {
+  vec3 transmittance = exp(-(viewRayOpticalDepth + sunRayOpticalDepth.x) * scatteringCoefficients);
+  vec3 surfaceColor = vec3(0, 0.35, 0.05);
+  vec3 color = surfaceColor * transmittance * sunRayOpticalDepth.y * dot(planetDist.xyz, normalize(sun.center - point));
+  // ambient light
+  color += vec3(0.16, 0.23, 0.54) * surfaceColor;
+  return color;
+}
+
 vec4 pixel(vec2 coord, vec2 gridCoord, vec2 coord01) {
   Ray ray = rayForPixel(gridCoord);
 
@@ -282,7 +326,7 @@ vec4 pixel(vec2 coord, vec2 gridCoord, vec2 coord01) {
   vec2 atmoshpereIntersection = raySphere(atmosphere, ray);
   vec2 basePlanetIntersection = raySphere(planet, ray);
   float distanceThroughAtmosphere = min(atmoshpereIntersection.y, basePlanetIntersection.x - atmoshpereIntersection.x);
-  float nextAtmoshpereStep = atmoshpereIntersection.x;
+  float nextAtmosphereStep = atmoshpereIntersection.x;
   // nextAtmoshpereStep = maxFloat; // Uncomment to disable atmosphere
   float atmosphereStepSize = distanceThroughAtmosphere / atmosphereSteps;
   float lastAtmosphereStep = atmoshpereIntersection.x + distanceThroughAtmosphere;
@@ -299,14 +343,11 @@ vec4 pixel(vec2 coord, vec2 gridCoord, vec2 coord01) {
 
     vec4 planetDist = sdfPlanetN(point, rayLength);
     if (planetDist.w < convergedStepSize) {
-      // float density = atmosphericDensity(sqrAtmosphereDist);
-      // viewRayOpticalDepth += density * (rayLength - (nextAtmoshpereStep - atmosphereStepSize));
+      float density = atmosphericDensity(sqrAtmosphereDist);
+      viewRayOpticalDepth += density * (rayLength - (nextAtmosphereStep - atmosphereStepSize));
       vec2 sunRayOpticalDepth = sunRayOpticalDepthAtPoint(point, rayLength);
 
-      // vec3 transmittance = exp(-(viewRayOpticalDepth + sunRayOpticalDepth.x) * scatteringCoefficients);
-      // inScatteredLight += density * transmittance;
-
-      color = vec3(0, 0.35, 0.05) /* * max(vec3(0.15), transmittance) */ * sunRayOpticalDepth.y * max(0.15, dot(planetDist.xyz, normalize(sun.center - point)));
+      color = surfaceShader(viewRayOpticalDepth, sunRayOpticalDepth, planetDist, point);
       hit = true;
       break;
     }
@@ -314,7 +355,7 @@ vec4 pixel(vec2 coord, vec2 gridCoord, vec2 coord01) {
     float nextStepSize = planetDist.w;
 
     if (sqrAtmosphereDist < sqrAtmosphereRadius) {
-      if (rayLength > nextAtmoshpereStep - 0.1) {
+      if (rayLength > nextAtmosphereStep - 0.1) {
         float density = atmosphericDensity(sqrAtmosphereDist);
         viewRayOpticalDepth += density * atmosphereStepSize;
         vec2 sunRayOpticalDepth = sunRayOpticalDepthAtPoint(point, rayLength);
@@ -322,10 +363,10 @@ vec4 pixel(vec2 coord, vec2 gridCoord, vec2 coord01) {
         vec3 transmittance = exp(-(viewRayOpticalDepth + sunRayOpticalDepth.x) * scatteringCoefficients);
         inScatteredLight += density * transmittance;
         
-        nextAtmoshpereStep += atmosphereStepSize;
+        nextAtmosphereStep += atmosphereStepSize;
       }
 
-      nextStepSize = min(nextStepSize, nextAtmoshpereStep - rayLength);
+      nextStepSize = min(nextStepSize, nextAtmosphereStep - rayLength);
     }
 
     rayLength += nextStepSize;
@@ -341,9 +382,6 @@ vec4 pixel(vec2 coord, vec2 gridCoord, vec2 coord01) {
   //   inScatteredLight = exp(-atmosphereDist / 64.0 * scatteringCoefficients) * scatteringCoefficients * brightness;
   // }
   
-  // return vec4(exp(-atmosphereDist / 32.0 * scatteringCoefficients) * scatteringCoefficients, 1.0);
-  // inScatteredLight = exp(-(atmosphereDist * 0.01) * scatteringCoefficients);
-  // inScatteredLight = clamp(inScatteredLight, 0.0, 0.2);
   inScatteredLight *= scatteringCoefficients * brightness * atmosphereStepSize;
 
   if (reachedSpace) {
@@ -362,10 +400,11 @@ vec4 pixel(vec2 coord, vec2 gridCoord, vec2 coord01) {
   // }
 
   inScatteredLight += (texture2D(blueNoise, coord / 32.0).rgb - 0.5) / 16.0;
+  color += inScatteredLight;
 
   coord01.y = 1.0 - coord01.y;
   vec3 prevPixel = texture2D(prevFrame, coord01).rgb;
-  return vec4((color + inScatteredLight) * 0.75 + prevPixel * 0.25, 1.0);
+  return vec4(mix(color, prevPixel, 0.25), 1.0);
 
   
   return vec4(color + inScatteredLight, 1.0);

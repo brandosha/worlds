@@ -61,7 +61,7 @@ fetch('shaders/raymarching-sdf.frag').then(response => response.text()).then(cod
   // kernel.setUniformValue('sun.center', (gl, l) => gl.uniform3f(l, 0, 1.5, -3))
   kernel.setUniformValue('sun.radius', (gl, l) => gl.uniform1f(l, 10))
 
-  const randomFrequencies = Array.from({ length: 2 * 5 }, (_, i) => (Math.random() + Math.floor(i / 2)) * 50)
+  const randomFrequencies = Array.from({ length: 2 * 5 }, (_, i) => (Math.random() + Math.floor(i / 2)) * 30)
   console.log(randomFrequencies)
   kernel.setUniformValue('randomFrequencies', (gl, l) => gl.uniform2fv(l, randomFrequencies))
   // kernel.setUniformValue('planetCenter', (gl, l) => gl.uniform3f(l, 0, -0.801, 0))
@@ -111,8 +111,8 @@ function render(now) {
   const fps = 1000 / delta
   document.getElementById('fps').innerText = fps.toFixed(2)
 
-  const deltaA = acceleration * delta / 1000
-  const deltaR = rotationalAcceleration * delta / 1000
+  const deltaA = acceleration / 60
+  const deltaR = rotationalAcceleration / 60
 
   if (keysDown.has('ArrowLeft')) {
     rotationalVelocities[1] -= deltaR
@@ -162,7 +162,9 @@ function render(now) {
   kernel.setUniformValue('cameraPos', (gl, l) => gl.uniform3fv(l, cameraPosition))
   kernel.setUniformValue('cameraRotation', (gl, l) => gl.uniformMatrix3fv(l, false, cameraRotation))
 
-  const t = now / 1000
+  const t = (Date.now() - 1653995923167) / 1000
+  kernel.setUniformValue('t', (gl, l) => gl.uniform1f(l, t))
+
   const dayLength = 120
   kernel.setUniformValue('sun.center', (gl, l) => gl.uniform3f(l, 0, 300 * cos(t / dayLength - 1.5), 300 * sin(t / dayLength - 1.5)))
   
