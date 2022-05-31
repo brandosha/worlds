@@ -25,7 +25,7 @@ uniform sampler2D prevFrame;
 
 const float convergedStepSize = 0.001;
 const float firstStepSize = 0.05;
-const float atmosphereSteps = 10.0;
+const float atmosphereSteps = 4.0;
 const float opticalDepthSteps = 4.0;
 
 const float maxDist = 1000.0;
@@ -123,7 +123,7 @@ vec3 sphericalToCartesian(vec2 uv) {
   return vec3(cos(theta) * sin(phi), sin(theta) * sin(phi), cos(phi));
 }
 
-const float sqareSubdivisions = 8.0;
+const float sqareSubdivisions = 16.0;
 vec3 discreteNormalize(vec3 p) {
   vec3 cubePoint = vec3(sqareSubdivisions);
   vec3 a = abs(p);
@@ -148,36 +148,39 @@ mat4 discretNormalize4(vec3 p) {
   vec3 a = abs(p);
   if (a.x > a.y && a.x > a.z) {
     cubePoint *= p / a.x;
-    vec3 p00 = floor(cubePoint);
+    vec3 p00 = cubePoint;
+    p00.yz = floor(p00.yz);
     return mat4(
-      vec4(p00, 0.0),
-      vec4(p00 + v10.yxy, 0.0),
-      vec4(p00 + v10.yyx, 0.0),
-      vec4(p00 + v10.yxx, 0.0)
+      vec4(normalize(p00), 0.0),
+      vec4(normalize(p00 + v10.yxy), 0.0),
+      vec4(normalize(p00 + v10.yyx), 0.0),
+      vec4(normalize(p00 + v10.yxx), 0.0)
     );
   } else if (a.y > a.z) {
     cubePoint *= p / a.y;
-    vec3 p00 = floor(cubePoint);
+    vec3 p00 = cubePoint;
+    p00.xz = floor(p00.xz);
     return mat4(
-      vec4(p00, 0.0),
-      vec4(p00 + v10.xyy, 0.0),
-      vec4(p00 + v10.yyx, 0.0),
-      vec4(p00 + v10.xyx, 0.0)
+      vec4(normalize(p00), 0.0),
+      vec4(normalize(p00 + v10.xyy), 0.0),
+      vec4(normalize(p00 + v10.yyx), 0.0),
+      vec4(normalize(p00 + v10.xyx), 0.0)
     );
   } else {
     cubePoint *= p / a.z;
-    vec3 p00 = floor(cubePoint);
+    vec3 p00 = cubePoint;
+    p00.xy = floor(p00.xy);
     return mat4(
-      vec4(p00, 0.0),
-      vec4(p00 + v10.xyy, 0.0),
-      vec4(p00 + v10.yxy, 0.0),
-      vec4(p00 + v10.xxy, 0.0)
+      vec4(normalize(p00), 0.0),
+      vec4(normalize(p00 + v10.xyy), 0.0),
+      vec4(normalize(p00 + v10.yxy), 0.0),
+      vec4(normalize(p00 + v10.xxy), 0.0)
     );
   }
 }
 
 Sphere randomSphere(vec3 pos) {
-  float radius = 1.0;
+  float radius = 3.0;
   // float height = 0.5;
   float height = 8.0 * abs((sin(pos.x * randomFrequencies[0].x + t) + sin(pos.x * randomFrequencies[1].x + t) + sin(pos.y * randomFrequencies[0].y + t) + sin(pos.y * randomFrequencies[1].y + t)) / 4.0) - 3.0;
 
@@ -192,11 +195,12 @@ float sdfPlanet(vec3 p, float eyeDist) {
     return d - 9.0;
   }
 
-  vec3 ballPos = discreteNormalize(p);
-  Sphere ball = randomSphere(ballPos);
-
-  float ballDist = sdfSphere(p, ball);
-  d = smin(d, ballDist, 1.75);
+  mat4 ballPositions = discretNormalize4(p);
+  for (int i = 0; i < 4; i++) {
+    Sphere ball = randomSphere(ballPositions[i].xyz);
+    float ballDist = sdfSphere(p, ball);
+    d = smin(d, ballDist, 1.75);
+  }
 
   return d;
 }
@@ -210,13 +214,15 @@ vec4 sdfPlanetN(vec3 p, float eyeDist) {
     return vec4(normal, d - 9.0);
   }
 
-  vec3 ballPos = discreteNormalize(p);
-  Sphere ball = randomSphere(ballPos);
+  mat4 ballPositions = discretNormalize4(p);
+  for (int i = 0; i < 4; i++) {
+    Sphere ball = randomSphere(ballPositions[i].xyz);
+    float ballDist = sdfSphere(p, ball);
+    d = smin(d, ballDist, 1.75);
 
-  float ballDist = sdfSphere(p, ball);
-  d = smin(d, ballDist, 1.75);
-  if (ballDist < d) {
-    normal = normalize(p - ball.center);
+    if (ballDist < d) {
+      normal = normalize(p - ball.center);
+    }
   }
 
   return vec4(normal, d);
@@ -269,8 +275,16 @@ vec4 debugSdf(Ray ray) {
   vec2 basePlanetIntersection = raySphere(planet, ray);
   if (basePlanetIntersection.x < maxFloat) {
     vec3 point = ray.origin + ray.direction * basePlanetIntersection.x;
-    vec3 g = discreteNormalize(point);
-    vec3 col = (g + 1.0) / 2.0;
+    vec3 normPoint = normalize(point);
+    mat4 g = discretNormalize4(point);
+    vec3 nearest = g[0].xyz;
+    for (int i = 1; i < 4; i++) {
+      if (length(g[i].xyz - normPoint) < length(nearest - normPoint)) {
+        nearest = g[i].xyz;
+      }
+    }
+    
+    vec3 col = (nearest + 1.0) / 2.0;
 
     return vec4(col, 1.0);
 
@@ -306,8 +320,8 @@ vec3 opRepLim( in vec3 p, in float c, in vec3 l, in sdf3d primitive )
 }*/
 
 vec3 surfaceShader(float viewRayOpticalDepth, vec2 sunRayOpticalDepth, vec4 planetDist, vec3 point) {
-  vec3 transmittance = exp(-(viewRayOpticalDepth + sunRayOpticalDepth.x) * scatteringCoefficients);
   vec3 surfaceColor = vec3(0, 0.35, 0.05);
+  vec3 transmittance = exp(-(viewRayOpticalDepth + sunRayOpticalDepth.x) * scatteringCoefficients);
   vec3 color = surfaceColor * transmittance * sunRayOpticalDepth.y * dot(planetDist.xyz, normalize(sun.center - point));
   // ambient light
   color += vec3(0.16, 0.23, 0.54) * surfaceColor;
@@ -329,7 +343,7 @@ vec4 pixel(vec2 coord, vec2 gridCoord, vec2 coord01) {
   float nextAtmosphereStep = atmoshpereIntersection.x;
   // nextAtmoshpereStep = maxFloat; // Uncomment to disable atmosphere
   float atmosphereStepSize = distanceThroughAtmosphere / atmosphereSteps;
-  float lastAtmosphereStep = atmoshpereIntersection.x + distanceThroughAtmosphere;
+  // float lastAtmosphereStep = atmoshpereIntersection.x + distanceThroughAtmosphere;
 
   float viewRayOpticalDepth = 0.0;
   vec3 inScatteredLight = vec3(0.0);
